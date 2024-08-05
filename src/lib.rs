@@ -8,7 +8,6 @@ type OpenFn = unsafe extern "C" fn(*const libc::c_char, libc::c_int) -> libc::c_
 type CloseFn = unsafe extern "C" fn(libc::c_int) -> libc::c_int;
 type ReadFn = unsafe extern "C" fn(libc::c_int, *mut c_void, libc::size_t) -> libc::ssize_t;
 
-
 static SECRET_FILE_NAME: &str = "secret.txt";
 static SECRET_CONTENT: &str = "Secret!";
 
@@ -105,8 +104,16 @@ mod tests {
         let path = CString::new(file_path.into_os_string().into_string().unwrap()).unwrap();
         let fd: i32 = open(path.as_ptr(), libc::O_RDONLY);
         assert!(fd >= 0, "Failed to open file");
-        assert!(unsafe {SECRET_DESCRIPTOR_TO_POSITION.lock().unwrap().get(&fd).is_none() }, "Expected fd not be in the dictionary");
-
+        assert!(
+            unsafe {
+                SECRET_DESCRIPTOR_TO_POSITION
+                    .lock()
+                    .unwrap()
+                    .get(&fd)
+                    .is_none()
+            },
+            "Expected fd not be in the dictionary"
+        );
 
         let mut file = unsafe { File::from_raw_fd(fd) };
         let mut contents = String::new();
@@ -153,9 +160,27 @@ mod tests {
         let path = CString::new(file_path.into_os_string().into_string().unwrap()).unwrap();
         let fd = open(path.as_ptr(), libc::O_RDONLY);
         assert!(fd > 0, "Expected open to success");
-        assert!(unsafe {SECRET_DESCRIPTOR_TO_POSITION.lock().unwrap().get(&fd).is_some() }, "Expected fd to be in the dictionary");
+        assert!(
+            unsafe {
+                SECRET_DESCRIPTOR_TO_POSITION
+                    .lock()
+                    .unwrap()
+                    .get(&fd)
+                    .is_some()
+            },
+            "Expected fd to be in the dictionary"
+        );
         let result = close(fd);
         assert_eq!(result, 0, "Expected close to return 0");
-        assert!(unsafe {SECRET_DESCRIPTOR_TO_POSITION.lock().unwrap().get(&fd).is_none() }, "Expected fd to be removed from the dictionary");
+        assert!(
+            unsafe {
+                SECRET_DESCRIPTOR_TO_POSITION
+                    .lock()
+                    .unwrap()
+                    .get(&fd)
+                    .is_none()
+            },
+            "Expected fd to be removed from the dictionary"
+        );
     }
 }
