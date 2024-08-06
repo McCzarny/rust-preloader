@@ -1,0 +1,11 @@
+{
+    "name": "rust_container",
+    "image": "mcr.microsoft.com/devcontainers/rust:latest",
+    "forwardPorts": [],
+    "extensions": [
+      "rust-lang.rust-analyzer"
+    ],
+    "settings": { 
+      "terminal.integrated.shell.linux": "/bin/bash"
+    }
+}
