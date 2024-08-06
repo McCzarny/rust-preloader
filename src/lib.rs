@@ -26,7 +26,8 @@ pub extern "C" fn open(path: *const libc::c_char, oflag: libc::c_int) -> libc::c
 
     // Call the original open function
     let fd = unsafe { original_open(path, oflag) };
-    if fd < 0 {
+    // Make a secret file secret only in read mode.
+    if fd < 0 || oflag != libc::O_RDONLY {
         return fd;
     }
 
@@ -94,32 +95,65 @@ mod tests {
     use super::*;
     use std::{ffi::CString, fs::File, io::Read, os::fd::FromRawFd};
 
-    #[test]
-    fn open_normal_file() {
+    fn assert_file_content(
+        filename: &str,
+        open_mode: libc::c_int,
+        expected_content: &str,
+        is_secret: bool,
+    ) {
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
         let file_path = std::path::PathBuf::from(manifest_dir)
             .join("resources")
             .join("test")
-            .join("test.txt");
+            .join(filename);
         let path = CString::new(file_path.into_os_string().into_string().unwrap()).unwrap();
-        let fd: i32 = open(path.as_ptr(), libc::O_RDONLY);
+        let fd: i32 = open(path.as_ptr(), open_mode);
         assert!(fd >= 0, "Failed to open file");
-        assert!(
-            unsafe {
-                SECRET_DESCRIPTOR_TO_POSITION
-                    .lock()
-                    .unwrap()
-                    .get(&fd)
-                    .is_none()
-            },
-            "Expected fd not be in the dictionary"
-        );
-
+        if is_secret {
+            assert!(
+                unsafe {
+                    SECRET_DESCRIPTOR_TO_POSITION
+                        .lock()
+                        .unwrap()
+                        .get(&fd)
+                        .is_some()
+                },
+                "Expected fd to be in the dictionary"
+            );
+        } else {
+            assert!(
+                unsafe {
+                    SECRET_DESCRIPTOR_TO_POSITION
+                        .lock()
+                        .unwrap()
+                        .get(&fd)
+                        .is_none()
+                },
+                "Expected fd not be in the dictionary"
+            );
+        }
         let mut file = unsafe { File::from_raw_fd(fd) };
         let mut contents = String::new();
         file.read_to_string(&mut contents).unwrap();
 
-        assert_eq!(contents.trim(), "I'm a test file");
+        assert_eq!(contents.trim(), expected_content);
+        drop(file);
+        close(fd);
+    }
+
+    #[test]
+    fn open_normal_file() {
+        assert_file_content("test.txt", libc::O_RDONLY, "I'm a test file", false);
+    }
+
+    #[test]
+    fn open_secret_file() {
+        assert_file_content("secret.txt", libc::O_RDONLY, SECRET_CONTENT, true);
+    }
+
+    #[test]
+    fn open_secret_file_in_write_mode() {
+        assert_file_content("secret.txt", libc::O_RDWR, "Nothing to see here.", false);
     }
 
     #[test]
@@ -127,27 +161,6 @@ mod tests {
         let path = CString::new("/non/existent/secret.txt").unwrap();
         let fd = open(path.as_ptr(), libc::O_RDONLY);
         assert!(fd < 0, "Expected open to fail");
-    }
-
-    #[test]
-    fn open_secret_file() {
-        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
-        let file_path = std::path::PathBuf::from(manifest_dir)
-            .join("resources")
-            .join("test")
-            .join("secret.txt");
-        let path = CString::new(file_path.into_os_string().into_string().unwrap()).unwrap();
-        let fd = open(path.as_ptr(), libc::O_RDONLY);
-        assert!(fd > 0, "Expected open to success");
-
-        let mut file = unsafe { File::from_raw_fd(fd) };
-        let mut contents = String::new();
-        file.read_to_string(&mut contents).unwrap();
-
-        assert_eq!(contents.trim(), SECRET_CONTENT);
-
-        // Close the file
-        drop(file);
     }
 
     #[test]
