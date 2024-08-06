@@ -1,11 +1,13 @@
 {
-    "name": "rust_container",
-    "image": "mcr.microsoft.com/devcontainers/rust:latest",
-    "forwardPorts": [],
-    "extensions": [
-      "rust-lang.rust-analyzer"
-    ],
-    "settings": { 
-      "terminal.integrated.shell.linux": "/bin/bash"
-    }
+  "name": "rust_container",
+  "image": "mcr.microsoft.com/devcontainers/rust:latest",
+  // Remove after image gets rustc 1.80 by default
+  "postCreateCommand": "rustup update stable && rustup default stable",
+  "customizations": {
+      "vscode": {
+          "extensions": [
+              "rust-lang.rust-analyzer"
+          ]
+      }
+  }
 }
